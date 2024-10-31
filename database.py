@@ -1,13 +1,16 @@
+import os
 import sqlite3
 import uuid
 from contextlib import contextmanager
 from datetime import datetime
 from typing import List, Optional
 
+# Get database path from environment variable, default to local directory
+DB_PATH = os.getenv('DB_PATH', 'tasks.db')
 
 @contextmanager
 def get_db():
-    conn = sqlite3.connect('tasks.db')
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         yield conn

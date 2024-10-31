@@ -17,6 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
+# Create data directory for SQLite
+RUN mkdir -p /app/data
+
 # Copy Python requirements and install
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -29,6 +32,9 @@ COPY --from=css-builder /app/dist/output.css dist/
 # Create non-root user
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
+
+# Set database path for production
+ENV DB_PATH=/app/data/tasks.db
 
 # Expose port
 EXPOSE 8000
