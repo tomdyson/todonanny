@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample Tailwind Layout</title>
+    <link href="/dist/output.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.min.js"></script>
+    <style>
+        .task-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+        
+        .task-item input[type="checkbox"] {
+            cursor: pointer;
+            margin-top: 0.2rem;
+        }
+        
+        .task-item span {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+
+<body class="flex justify-center min-h-screen pt-6 font-mono text-slate-700">
+    <div id="app" class="max-w-screen-md mx-auto w-full p-4 bg-white flex flex-col lg:flex-row">
+        <div class="w-full lg:w-1/3 p-4">
+            <!-- Content for 1st column -->
+            <img src="/static/paris-figure.jpg" alt="Paris" class="lg:w-full w-32">
+        </div>
+        <div class="w-full lg:w-3/4 p-4">
+            <!-- Content for 2nd column -->
+            <form @submit="getStatement">
+                <div class="flex justify-between items-center mb-3 mt-3">
+                    <!-- 
+                    <label for="question" class="text-3xl text-slate-500 font-mono font-light block">Todo Nanny</label> 
+                    <span class="text-sm">
+                        use GPT-4 <input type="checkbox" name="use_gpt_4" v-model.lazy="use_gpt_4">
+                    </span>
+                    -->
+                </div>
+                <textarea id="question" 
+                    class="text-lg font-light border border-gray-300 px-2 py-1 mb-1 w-full rounded resize-none overflow-hidden min-h-[36px] leading-[1.5]"
+                    v-model.lazy="question" 
+                    @input="autoResize" 
+                    autofocus="true"
+                    rows="1"
+                ></textarea>
+                <input id="submit"
+                    class="hover:opacity-75 mt-3 cursor-pointer bg-cyan-100 px-2 py-1 font-light rounded text-lg mb-1"
+                    type="submit" :value="button_text" />
+            </form>
+
+            <div class="mt-1 mb-2" v-if="statement.length">
+                <div class="my-3 text-lg font-mono text-white bg-rose-300 pt-2 px-2 pb-1 rounded leading-normal"
+                    v-if="statement.length">
+                    <div v-for="(task, index) in tasks" :key="index" class="task-item">
+                        <input type="checkbox" 
+                            :id="'task-' + index" 
+                            v-model="task.completed"
+                            @change="saveTasks"
+                            class="mr-2 h-4 w-4 rounded border-gray-300 text-rose-400 focus:ring-rose-300 cursor-pointer">
+                        <span :class="{'line-through': task.completed }" class="leading-tight">
+                            <div class="text-sm">{{task.start_time}}-{{task.end_time}}</div>
+                            <div>{{task.description}}</div>
+                        </span>
+                    </div>
+                </div>
+                
+            </div>
+
+            <div id="context" v-if="html_results.length"
+                class="my-3 text-lg pt-2 px-2 pb-1 rounded leading-normal bg-cyan-100 text-cyan-600"
+                v-html="html_results">
+            </div>
+
+            <div v-if="answer.length" v-html="answer"
+                class="my-3 text-lg bg-green-200 font-mono pt-2 px-2 pb-1 rounded leading-normal"></div>
+
+        </div>
+    </div>
+
+    <script>
+        function formatStatement(statement) {
+            return statement.replace(/\n/g, "<br />");
+        }
+
+        var app = new Vue({
+            el: "#app",
+            data: {
+                use_gpt_4: false,
+                button_text: "Plan my day",
+                question: "",
+                statement: "",
+                formatted_statement: "",
+                data: "",
+                gpt_cost_in_pence: 0,
+                text_results: "",
+                html_results: "",
+                answer: "",
+                execute_link_text: "OK, run it",
+                qpm: 0,
+                api_stub: "", // e.g. https://my-domain.com
+                tasks: [], // Add this to store tasks with their completion status
+            },
+            methods: {
+                async getStatement(e) {
+                    try {
+                        e.preventDefault();
+                        app.button_text = "Planning your day...";
+                        app.statement = "loading...";
+                        app.answer = "";
+                        app.html_results = "";
+
+                        // Calculate current time rounded to nearest 15 minutes
+                        const now = new Date();
+                        const minutes = now.getMinutes();
+                        const roundedMinutes = Math.floor(minutes / 15) * 15;
+                        now.setMinutes(roundedMinutes);
+                        now.setSeconds(0);
+                        now.setMilliseconds(0);
+                        
+                        // Format time as HH:MM
+                        const start_time = now.toLocaleTimeString('en-US', { 
+                            hour12: false, 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                        });
+
+                        localStorage.removeItem('dailyTasks');
+                        app.tasks = [];  // Clear tasks from memory too
+
+                        const response = await fetch('/api/plan', {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", },
+                            body: JSON.stringify({ 
+                                description: app.question,
+                                start_time: start_time
+                            }),
+                        });
+
+                        if (!response.ok) throw new Error('Network response was not ok');
+
+                        const responseJson = await response.json();
+                        
+                        // Store tasks with completion status
+                        app.tasks = responseJson.tasks.map(task => ({
+                            ...task,
+                            completed: false
+                        }));
+                        
+                        // Save tasks to localStorage
+                        app.saveTasks();
+                        
+                        // Just set statement to a non-empty value to show the tasks section
+                        app.statement = "loaded";
+                        app.button_text = "Plan my day";
+                    } catch (error) {
+                        console.log(error);
+                        app.button_text = "Sorry, something went wrong.";
+                    }
+                },
+                async run_statement() {
+                    try {
+                        app.execute_link_text = "";
+                        app.html_results = "";
+
+                        let response = await fetch(app.api_stub + '/api/run_statement', {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", },
+                            body: JSON.stringify({
+                                question: app.question,
+                                statement: app.statement,
+                            }),
+                        })
+
+                        if (!response.ok) throw new Error('Error while running statement.');
+
+                        let responseJson = await response.json();
+                        app.text_results = responseJson.text_results;
+                        app.html_results = responseJson.html_results;
+                        app.execute_link_text = "OK, run it";
+                        app.answer = 'working out answer...'
+
+                        response = await fetch(app.api_stub + '/api/answer', {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", },
+                            body: JSON.stringify({
+                                question: app.question,
+                                statement: app.statement,
+                                results: app.text_results
+                            }),
+                        })
+
+                        if (!response.ok) throw new Error('Error while getting the answer.');
+
+                        responseJson = await response.json();
+                        app.answer = formatStatement(responseJson.answer);
+                    } catch (error) {
+                        console.log(error);
+                        app.execute_link_text = "An error occurred. Please try again.";
+                    }
+                },
+                autoResize(e) {
+                    const textarea = e.target;
+                    textarea.style.height = 'auto';
+                    textarea.style.height = textarea.scrollHeight + 'px';
+                },
+                toggleTask(index) {
+                    this.tasks[index].completed = !this.tasks[index].completed;
+                    this.saveTasks();
+                },
+                saveTasks() {
+                    localStorage.setItem('dailyTasks', JSON.stringify(this.tasks));
+                },
+                loadTasks() {
+                    const savedTasks = localStorage.getItem('dailyTasks');
+                    if (savedTasks) {
+                        this.tasks = JSON.parse(savedTasks);
+                        // Just set statement to show the tasks section
+                        this.statement = "loaded";
+                    }
+                },
+            },
+            mounted() {
+                this.loadTasks();
+            },
+        });
+    </script>
+</body>
+
+</html>

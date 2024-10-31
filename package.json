@@ -1,0 +1,12 @@
+{
+  "name": "todonanny",
+  "version": "1.0.0",
+  "description": "todonanny Frontend",
+  "scripts": {
+    "build:css": "tailwindcss -i ./src/input.css -o ./dist/output.css --minify",
+    "watch:css": "tailwindcss -i ./src/input.css -o ./dist/output.css --watch --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.1"
+  }
+} 
