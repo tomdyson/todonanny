@@ -1,4 +1,0 @@
-# netlify redirects file
-# send all api/* requests to a different host
-# API_STUB is rewritten to the correct host by Netlify during build
-/api/* API_STUB:splat 200
