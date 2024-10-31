@@ -17,13 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user with explicit UID/GID first
+# Create non-root user
 RUN useradd -u 1000 -m appuser
 
-# Create data directory for SQLite with proper permissions
+# Create data directory
 RUN mkdir -p /app/data && \
-    chown -R appuser:appuser /app/data && \
-    chmod 777 /app/data  # Make directory fully writable
+    chown appuser:appuser /app/data
 
 # Copy Python requirements and install
 COPY requirements.txt .
@@ -34,13 +33,8 @@ COPY . .
 # Copy built CSS from css-builder stage
 COPY --from=css-builder /app/dist/output.css dist/
 
-# Set all application files ownership
+# Set ownership of application files
 RUN chown -R appuser:appuser /app
-
-# Create an empty database file with proper permissions
-RUN touch /app/data/tasks.db && \
-    chown appuser:appuser /app/data/tasks.db && \
-    chmod 666 /app/data/tasks.db
 
 # Switch to appuser
 USER appuser
