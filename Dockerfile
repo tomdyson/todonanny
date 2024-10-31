@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY src/ src/
+COPY index.html ./
 COPY tailwind.config.js ./
 RUN npx tailwindcss -i ./src/input.css -o ./dist/output.css --minify
 
