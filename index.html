@@ -105,8 +105,12 @@
                 class="my-3 text-lg bg-green-200 font-mono pt-2 px-2 pb-1 rounded leading-normal"></div>
 
             <!-- Add link back to form -->
-            <div v-if="is_view_mode && tasks.length" class="mt-4">
+            <div v-if="is_view_mode && tasks.length" class="mt-4 space-x-2">
                 <a href="/" class="hover:opacity-75 mt-3 cursor-pointer bg-cyan-100 px-2 py-1 font-light rounded text-lg mb-1">Plan a new day</a>
+                <button @click="shareList" 
+                    class="hover:opacity-75 mt-3 cursor-pointer bg-green-100 px-2 py-1 font-light rounded text-lg mb-1">
+                    Share
+                </button>
             </div>
 
         </div>
@@ -145,6 +149,24 @@
                 <p><kbd class="px-1 bg-slate-100 rounded">?</kbd> Toggle help</p>
             </div>
         </div>
+
+        <!-- Add this modal HTML just before the help button div -->
+        <div v-if="showShareModal" 
+            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg p-6 max-w-sm w-full">
+                <h3 class="font-bold mb-4">Share your task list</h3>
+                <input type="text" 
+                    :value="window.location.href" 
+                    class="w-full p-2 border rounded mb-4 bg-slate-50"
+                    readonly>
+                <div class="flex justify-end space-x-2">
+                    <button @click="closeShareModal" 
+                        class="px-4 py-2 rounded hover:opacity-75 bg-slate-100">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -173,6 +195,7 @@
                 is_view_mode: false,
                 selectedTaskIndex: -1, // Track which task is currently selected
                 showHelp: false,
+                showShareModal: false,
             },
             methods: {
                 async getStatement(e) {
@@ -377,6 +400,21 @@
                 },
                 toggleHelp() {
                     this.showHelp = !this.showHelp;
+                },
+                shareList() {
+                    this.showShareModal = true;
+                    // Copy to clipboard
+                    navigator.clipboard.writeText(window.location.href)
+                        .then(() => {
+                            // Optional: You could add a toast notification here
+                            console.log('URL copied to clipboard');
+                        })
+                        .catch(err => {
+                            console.error('Failed to copy URL:', err);
+                        });
+                },
+                closeShareModal() {
+                    this.showShareModal = false;
                 }
             },
             mounted() {

@@ -2,10 +2,12 @@ import json
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import List
 from uuid import UUID
 
 import llm
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -13,6 +15,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import database
+
+# Get the directory where main.py is located
+BASE_DIR = Path(__file__).resolve().parent
+
+# Load environment variables from .env file
+load_dotenv(BASE_DIR / ".env", override=True)
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -68,6 +76,7 @@ class TaskUpdateRequest(BaseModel):
 MODEL_NAME = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
 API_KEY = os.getenv("LLM_API_KEY")
 
+
 # Update the system prompt to be more explicit about JSON format
 SYSTEM_PROMPT = """You are a helpful daily planner assistant. Given a list of tasks, 
 create a schedule for today starting at {start_time}. Break down the tasks into 
@@ -93,7 +102,9 @@ IMPORTANT: Respond ONLY with the JSON array, no additional text."""
 async def startup_event():
     # Add a small delay to ensure volume is mounted
     time.sleep(2)
-    print(f"Starting application with database path: {os.getenv('DB_PATH', 'tasks.db')}")
+    print(
+        f"Starting application with database path: {os.getenv('DB_PATH', 'tasks.db')}"
+    )
     database.init_db()
 
 
@@ -162,11 +173,12 @@ async def get_tasks(list_id: str):
         UUID(list_id)  # Validate UUID format
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid list ID format")
-    
+
     tasks = database.get_task_list(list_id)
     if tasks is None:
         raise HTTPException(status_code=404, detail="Task list not found")
     return {"tasks": tasks}
+
 
 @app.put("/api/tasks/{list_id}/{task_index}")
 async def update_task(list_id: str, task_index: int, request: TaskUpdateRequest):
@@ -174,10 +186,11 @@ async def update_task(list_id: str, task_index: int, request: TaskUpdateRequest)
         UUID(list_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid list ID format")
-    
+
     if not database.update_task_status(list_id, task_index, request.completed):
         raise HTTPException(status_code=404, detail="Task not found")
     return {"success": True}
+
 
 # Add a route for the task list view
 @app.get("/tasks/{list_id}")
