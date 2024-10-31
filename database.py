@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import stat
 import uuid
 from contextlib import contextmanager
 from datetime import datetime
@@ -7,18 +8,49 @@ from typing import List, Optional
 
 # Get database path from environment variable, default to local directory
 DB_PATH = os.getenv('DB_PATH', 'tasks.db')
+print(f"Database path is set to: {DB_PATH}")
+
+# Debug directory information
+db_dir = os.path.dirname(DB_PATH)
+print(f"Database directory: {db_dir}")
 
 # Ensure the directory exists
-os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+try:
+    if db_dir:  # Only try to create directory if path contains a directory part
+        os.makedirs(db_dir, exist_ok=True)
+        print(f"Directory exists or was created: {db_dir}")
+    
+    # Check directory permissions and ownership
+    if db_dir:
+        stat_info = os.stat(db_dir)
+        print(f"Directory permissions: {stat.filemode(stat_info.st_mode)}")
+        print(f"Directory owner: {stat_info.st_uid}")
+        print(f"Directory group: {stat_info.st_gid}")
+    
+    # List directory contents
+    if db_dir:
+        print(f"Directory contents: {os.listdir(db_dir)}")
+except Exception as e:
+    print(f"Error during directory setup: {str(e)}")
 
 @contextmanager
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
     try:
+        print(f"Attempting to connect to database at: {DB_PATH}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Current user ID: {os.getuid()}")
+        print(f"Current group ID: {os.getgid()}")
+        
+        conn = sqlite3.connect(DB_PATH)
+        print("Successfully connected to database")
+        conn.row_factory = sqlite3.Row
         yield conn
+    except Exception as e:
+        print(f"Error connecting to database: {str(e)}")
+        raise
     finally:
-        conn.close()
+        if 'conn' in locals():
+            conn.close()
 
 def init_db():
     with get_db() as conn:

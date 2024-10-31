@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from datetime import datetime
 from typing import List
 from uuid import UUID
@@ -90,6 +91,9 @@ IMPORTANT: Respond ONLY with the JSON array, no additional text."""
 # Initialize the database when the app starts
 @app.on_event("startup")
 async def startup_event():
+    # Add a small delay to ensure volume is mounted
+    time.sleep(2)
+    print(f"Starting application with database path: {os.getenv('DB_PATH', 'tasks.db')}")
     database.init_db()
 
 
