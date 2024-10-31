@@ -22,18 +22,29 @@
         .task-item span {
             transition: all 0.3s ease;
         }
+
+        .image-container {
+            transition: width 0.5s ease-in-out;
+        }
+        
+        .image-container img {
+            transition: all 0.5s ease-in-out;
+            width: 100%;
+        }
     </style>
 </head>
 
 <body class="flex justify-center min-h-screen pt-6 font-mono text-slate-700">
     <div id="app" class="max-w-screen-md mx-auto w-full p-4 bg-white flex flex-col lg:flex-row">
-        <div class="w-full lg:w-1/3 p-4">
-            <!-- Content for 1st column -->
+        <div class="image-container w-full lg:w-1/5 p-4" v-if="is_view_mode">
+            <img src="/static/paris-figure.jpg" alt="Paris">
+        </div>
+        <div class="image-container w-full lg:w-1/3 p-4" v-else>
             <img src="/static/paris-figure.jpg" alt="Paris" class="lg:w-full w-32">
         </div>
         <div class="w-full lg:w-3/4 p-4">
             <!-- Content for 2nd column -->
-            <form @submit="getStatement">
+            <form @submit="getStatement" v-if="!is_view_mode">
                 <div class="flex justify-between items-center mb-3 mt-3">
                     <!-- 
                     <label for="question" class="text-3xl text-slate-500 font-mono font-light block">Todo Nanny</label> 
@@ -54,9 +65,8 @@
                     type="submit" :value="button_text" />
             </form>
 
-            <div class="mt-1 mb-2" v-if="statement.length">
-                <div class="my-3 text-lg font-mono text-white bg-rose-300 pt-2 px-2 pb-1 rounded leading-normal"
-                    v-if="statement.length">
+            <div class="mt-1 mb-2" v-if="tasks.length">
+                <div class="my-3 text-lg font-mono text-white bg-rose-300 pt-2 px-2 pb-1 rounded leading-normal">
                     <div v-for="(task, index) in tasks" :key="index" class="task-item">
                         <input type="checkbox" 
                             :id="'task-' + index" 
@@ -79,6 +89,11 @@
 
             <div v-if="answer.length" v-html="answer"
                 class="my-3 text-lg bg-green-200 font-mono pt-2 px-2 pb-1 rounded leading-normal"></div>
+
+            <!-- Add link back to form -->
+            <div v-if="is_view_mode && tasks.length" class="mt-4">
+                <a href="/" class="hover:opacity-75 mt-3 cursor-pointer bg-cyan-100 px-2 py-1 font-light rounded text-lg mb-1">Plan a new day</a>
+            </div>
 
         </div>
     </div>
@@ -105,13 +120,15 @@
                 qpm: 0,
                 api_stub: "", // e.g. https://my-domain.com
                 tasks: [], // Add this to store tasks with their completion status
+                list_id: null,
+                is_view_mode: false,
             },
             methods: {
                 async getStatement(e) {
                     try {
                         e.preventDefault();
                         app.button_text = "Planning your day...";
-                        app.statement = "loading...";
+                        app.tasks = [];  // Clear tasks immediately
                         app.answer = "";
                         app.html_results = "";
 
@@ -130,9 +147,6 @@
                             minute: '2-digit' 
                         });
 
-                        localStorage.removeItem('dailyTasks');
-                        app.tasks = [];  // Clear tasks from memory too
-
                         const response = await fetch('/api/plan', {
                             method: "POST",
                             headers: { "Content-Type": "application/json", },
@@ -146,17 +160,17 @@
 
                         const responseJson = await response.json();
                         
-                        // Store tasks with completion status
+                        // Update the app state before redirecting
+                        app.list_id = responseJson.list_id;
+                        app.is_view_mode = true;
                         app.tasks = responseJson.tasks.map(task => ({
                             ...task,
                             completed: false
                         }));
                         
-                        // Save tasks to localStorage
-                        app.saveTasks();
+                        // Update URL without page reload
+                        window.history.pushState({}, '', `/tasks/${responseJson.list_id}`);
                         
-                        // Just set statement to a non-empty value to show the tasks section
-                        app.statement = "loaded";
                         app.button_text = "Plan my day";
                     } catch (error) {
                         console.log(error);
@@ -224,9 +238,38 @@
                         this.statement = "loaded";
                     }
                 },
+                async loadTasksFromServer() {
+                    try {
+                        const response = await fetch(`/api/tasks/${this.list_id}`);
+                        if (!response.ok) throw new Error('Failed to load tasks');
+                        const data = await response.json();
+                        this.tasks = data.tasks;
+                        this.statement = "loaded"; // To show the task list
+                    } catch (error) {
+                        console.error('Error loading tasks:', error);
+                    }
+                },
+                async updateTaskStatus(index, completed) {
+                    try {
+                        const response = await fetch(`/api/tasks/${this.list_id}/${index}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ completed })
+                        });
+                        if (!response.ok) throw new Error('Failed to update task');
+                    } catch (error) {
+                        console.error('Error updating task:', error);
+                    }
+                },
             },
             mounted() {
-                this.loadTasks();
+                // Check if we're on a task list page
+                const path = window.location.pathname;
+                if (path.startsWith('/tasks/')) {
+                    this.list_id = path.split('/')[2];
+                    this.is_view_mode = true;
+                    this.loadTasksFromServer();
+                }
             },
         });
     </script>

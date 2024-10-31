@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime
 from typing import List
+from uuid import UUID
 
 import llm
 from fastapi import FastAPI, HTTPException
@@ -9,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+import database
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -53,6 +56,7 @@ class Task(BaseModel):
 
 class TaskResponse(BaseModel):
     tasks: List[Task]
+    list_id: str
 
 
 # Get environment variables
@@ -77,6 +81,12 @@ Example format:
 
 Keep responses concise and practical. Include short breaks between tasks. 
 IMPORTANT: Respond ONLY with the JSON array, no additional text."""
+
+
+# Initialize the database when the app starts
+@app.on_event("startup")
+async def startup_event():
+    database.init_db()
 
 
 @app.post("/api/plan", response_model=TaskResponse)
@@ -113,7 +123,11 @@ async def plan_day(request: TaskRequest):  # sourcery skip: invert-any-all
                 ):
                     raise ValueError("Task missing required fields")
 
-            return TaskResponse(tasks=tasks)
+            # Save tasks and get unique ID
+            list_id = database.create_task_list(tasks)
+
+            # Add list_id to response
+            return TaskResponse(tasks=tasks, list_id=list_id)
         except json.JSONDecodeError as e:
             print(f"JSON parsing error: {str(e)}")  # Debug print
             raise HTTPException(
@@ -131,6 +145,36 @@ async def plan_day(request: TaskRequest):  # sourcery skip: invert-any-all
         raise HTTPException(
             status_code=500, detail=f"Error processing request: {str(e)}"
         )
+
+
+# Add new endpoints for task list management
+@app.get("/api/tasks/{list_id}")
+async def get_tasks(list_id: str):
+    try:
+        UUID(list_id)  # Validate UUID format
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid list ID format")
+    
+    tasks = database.get_task_list(list_id)
+    if tasks is None:
+        raise HTTPException(status_code=404, detail="Task list not found")
+    return {"tasks": tasks}
+
+@app.put("/api/tasks/{list_id}/{task_index}")
+async def update_task(list_id: str, task_index: int, completed: bool):
+    try:
+        UUID(list_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid list ID format")
+    
+    if not database.update_task_status(list_id, task_index, completed):
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"success": True}
+
+# Add a route for the task list view
+@app.get("/tasks/{list_id}")
+async def task_list_page(list_id: str):
+    return FileResponse("index.html")
 
 
 if __name__ == "__main__":
