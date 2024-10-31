@@ -26,9 +26,18 @@ try:
         try:
             with open(DB_PATH, 'a'):
                 os.utime(DB_PATH, None)
+            # Make sure file is writable
+            os.chmod(DB_PATH, 0o666)
             print(f"Successfully created database file")
         except Exception as e:
             print(f"Error creating database file: {str(e)}")
+    else:
+        # If file exists, try to make it writable
+        try:
+            os.chmod(DB_PATH, 0o666)
+            print("Made existing database file writable")
+        except Exception as e:
+            print(f"Error making database file writable: {str(e)}")
     
     # Check directory permissions and ownership
     if db_dir:

@@ -23,7 +23,7 @@ RUN useradd -u 1000 -m appuser
 # Create data directory for SQLite with proper permissions
 RUN mkdir -p /app/data && \
     chown -R appuser:appuser /app/data && \
-    chmod 755 /app/data
+    chmod 777 /app/data  # Make directory fully writable
 
 # Copy Python requirements and install
 COPY requirements.txt .
@@ -36,6 +36,11 @@ COPY --from=css-builder /app/dist/output.css dist/
 
 # Set all application files ownership
 RUN chown -R appuser:appuser /app
+
+# Create an empty database file with proper permissions
+RUN touch /app/data/tasks.db && \
+    chown appuser:appuser /app/data/tasks.db && \
+    chmod 666 /app/data/tasks.db
 
 # Switch to appuser
 USER appuser
