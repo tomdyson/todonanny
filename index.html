@@ -12,6 +12,8 @@
             display: flex;
             align-items: flex-start;
             margin-bottom: 0.5rem;
+            padding: 0.25rem;
+            border-radius: 0.25rem;
         }
         
         .task-item input[type="checkbox"] {
@@ -29,7 +31,16 @@
         
         .image-container img {
             transition: all 0.5s ease-in-out;
-            width: 100%;
+            height: auto;
+        }
+
+        .task-item.bg-rose-400 {
+            background-color: rgb(251 113 133);
+        }
+
+        kbd {
+            font-family: ui-monospace, monospace;
+            border: 1px solid #e2e8f0;
         }
     </style>
 </head>
@@ -37,10 +48,10 @@
 <body class="flex justify-center min-h-screen pt-6 font-mono text-slate-700">
     <div id="app" class="max-w-screen-md mx-auto w-full p-4 bg-white flex flex-col lg:flex-row">
         <div class="image-container w-full lg:w-1/5 p-4" v-if="is_view_mode">
-            <img src="/static/paris-figure.jpg" alt="Paris">
+            <img src="/static/paris-figure.jpg" alt="Paris" class="w-12 lg:w-full">
         </div>
         <div class="image-container w-full lg:w-1/3 p-4" v-else>
-            <img src="/static/paris-figure.jpg" alt="Paris" class="lg:w-full w-32">
+            <img src="/static/paris-figure.jpg" alt="Paris" class="w-12 lg:w-full">
         </div>
         <div class="w-full lg:w-3/4 p-4">
             <!-- Content for 2nd column -->
@@ -67,7 +78,10 @@
 
             <div class="mt-1 mb-2" v-if="tasks.length">
                 <div class="my-3 text-lg font-mono text-white bg-rose-300 pt-2 px-2 pb-1 rounded leading-normal">
-                    <div v-for="(task, index) in tasks" :key="index" class="task-item">
+                    <div v-for="(task, index) in tasks" 
+                        :key="index" 
+                        class="task-item"
+                        :class="{'bg-rose-400': index === selectedTaskIndex }">
                         <input type="checkbox" 
                             :id="'task-' + index" 
                             v-model="task.completed"
@@ -96,6 +110,41 @@
             </div>
 
         </div>
+
+        <!-- Help button -->
+        <div class="fixed bottom-4 left-4">
+            <button @click="toggleHelp" 
+                class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600">
+                ?
+            </button>
+        </div>
+
+        <!-- Help overlay -->
+        <div v-if="showHelp" 
+            class="fixed bottom-16 left-4 p-4 bg-white shadow-lg rounded-lg border border-slate-200 max-w-sm">
+            <h3 class="font-bold mb-2">{{ is_view_mode ? 'Keyboard Shortcuts' : 'How to Use' }}</h3>
+            
+            <!-- View mode help -->
+            <div v-if="is_view_mode">
+                <ul class="text-sm space-y-1">
+                    <li><kbd class="px-1 bg-slate-100 rounded">↑</kbd> / <kbd class="px-1 bg-slate-100 rounded">↓</kbd> Navigate tasks</li>
+                    <li><kbd class="px-1 bg-slate-100 rounded">space</kbd> or <kbd class="px-1 bg-slate-100 rounded">x</kbd> Toggle selected task</li>
+                    <li><kbd class="px-1 bg-slate-100 rounded">p</kbd> Plan a new day</li>
+                    <li><kbd class="px-1 bg-slate-100 rounded">?</kbd> Toggle help</li>
+                </ul>
+            </div>
+            
+            <!-- Form mode help -->
+            <div v-else class="text-sm space-y-2">
+                <p>Describe your tasks in natural language. For example:</p>
+                <p class="bg-slate-50 p-2 rounded italic">
+                    "I need to write a blog post which will take about 2 hours, then have lunch for 45 minutes, 
+                    followed by 3 hours of coding. I want to finish by 5pm."
+                </p>
+                <p>The app will create a schedule breaking down your day into manageable tasks.</p>
+                <p><kbd class="px-1 bg-slate-100 rounded">?</kbd> Toggle help</p>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -122,6 +171,8 @@
                 tasks: [], // Add this to store tasks with their completion status
                 list_id: null,
                 is_view_mode: false,
+                selectedTaskIndex: -1, // Track which task is currently selected
+                showHelp: false,
             },
             methods: {
                 async getStatement(e) {
@@ -167,6 +218,9 @@
                             ...task,
                             completed: false
                         }));
+                        
+                        // Set the initial selected task to the first task
+                        app.selectedTaskIndex = app.tasks.length > 0 ? 0 : -1;
                         
                         // Update URL without page reload
                         window.history.pushState({}, '', `/tasks/${responseJson.list_id}`);
@@ -262,6 +316,10 @@
                             _previousCompleted: task.completed
                         }));
                         this.statement = "loaded"; // To show the task list
+                        
+                        // Find the first uncompleted task
+                        const firstUncompletedIndex = this.tasks.findIndex(task => !task.completed);
+                        this.selectedTaskIndex = firstUncompletedIndex >= 0 ? firstUncompletedIndex : 0;
                     } catch (error) {
                         console.error('Error loading tasks:', error);
                     }
@@ -278,6 +336,48 @@
                         console.error('Error updating task:', error);
                     }
                 },
+                handleKeyboard(e) {
+                    // Handle '?' key in both modes
+                    if (e.key === '?') {
+                        e.preventDefault();
+                        this.showHelp = !this.showHelp;
+                        return;
+                    }
+
+                    if (!this.tasks.length) return;
+                    
+                    // Only handle 'p' if in view mode
+                    if (e.key === 'p' && this.is_view_mode) {
+                        e.preventDefault();
+                        window.location.href = '/';
+                        return;
+                    }
+                    
+                    // Only handle task navigation in view mode
+                    if (!this.is_view_mode) return;
+                    
+                    switch (e.key) {
+                        case 'ArrowUp':
+                            e.preventDefault();
+                            this.selectedTaskIndex = Math.max(0, this.selectedTaskIndex - 1);
+                            break;
+                        case 'ArrowDown':
+                            e.preventDefault();
+                            this.selectedTaskIndex = Math.min(this.tasks.length - 1, this.selectedTaskIndex + 1);
+                            break;
+                        case 'x':
+                        case ' ': // space key
+                            e.preventDefault();
+                            if (this.selectedTaskIndex >= 0) {
+                                this.tasks[this.selectedTaskIndex].completed = !this.tasks[this.selectedTaskIndex].completed;
+                                this.saveTasks();
+                            }
+                            break;
+                    }
+                },
+                toggleHelp() {
+                    this.showHelp = !this.showHelp;
+                }
             },
             mounted() {
                 // Check if we're on a task list page
@@ -287,6 +387,12 @@
                     this.is_view_mode = true;
                     this.loadTasksFromServer();
                 }
+
+                // Add keyboard event listener
+                window.addEventListener('keydown', this.handleKeyboard);
+            },
+            destroyed() {
+                window.removeEventListener('keydown', this.handleKeyboard);
             },
         });
     </script>
