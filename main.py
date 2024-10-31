@@ -79,8 +79,10 @@ API_KEY = os.getenv("LLM_API_KEY")
 
 # Update the system prompt to be more explicit about JSON format
 SYSTEM_PROMPT = """You are a helpful daily planner assistant. Given a list of tasks, 
-create a schedule for today starting at {start_time}. Break down the tasks into 
-manageable chunks and assign realistic time slots.
+create a schedule for today starting at {start_time} (unless the user specifies a start time). 
+Break down the tasks into  manageable chunks and assign realistic time slots. 
+Don't add breaks before or after events that are already breaks, like lunch or going for a walk.
+Only add breaks between tasks.
 
 You must respond with a valid JSON array of objects. Each object must have exactly these fields:
 - "start_time": string in "HH:MM" format

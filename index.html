@@ -105,10 +105,10 @@
                 class="my-3 text-lg bg-green-200 font-mono pt-2 px-2 pb-1 rounded leading-normal"></div>
 
             <!-- Add link back to form -->
-            <div v-if="is_view_mode && tasks.length" class="mt-4 space-x-2">
-                <a href="/" class="hover:opacity-75 mt-3 cursor-pointer bg-cyan-100 px-2 py-1 font-light rounded text-lg mb-1">Plan a new day</a>
+            <div v-if="is_view_mode && tasks.length" class="mt-4 flex space-x-2">
+                <a href="/" class="hover:opacity-75 cursor-pointer bg-cyan-100 px-2 py-1 font-light rounded text-lg">Plan a new day</a>
                 <button @click="shareList" 
-                    class="hover:opacity-75 mt-3 cursor-pointer bg-green-100 px-2 py-1 font-light rounded text-lg mb-1">
+                    class="hover:opacity-75 cursor-pointer bg-green-100 px-2 py-1 font-light rounded text-lg">
                     Share
                 </button>
             </div>
@@ -133,6 +133,7 @@
                 <ul class="text-sm space-y-1">
                     <li><kbd class="px-1 bg-slate-100 rounded">↑</kbd> / <kbd class="px-1 bg-slate-100 rounded">↓</kbd> Navigate tasks</li>
                     <li><kbd class="px-1 bg-slate-100 rounded">space</kbd> or <kbd class="px-1 bg-slate-100 rounded">x</kbd> Toggle selected task</li>
+                    <li><kbd class="px-1 bg-slate-100 rounded">s</kbd> Share task list</li>
                     <li><kbd class="px-1 bg-slate-100 rounded">p</kbd> Plan a new day</li>
                     <li><kbd class="px-1 bg-slate-100 rounded">?</kbd> Toggle help</li>
                 </ul>
@@ -142,8 +143,8 @@
             <div v-else class="text-sm space-y-2">
                 <p>Describe your tasks in natural language. For example:</p>
                 <p class="bg-slate-50 p-2 rounded italic">
-                    "I need to write a blog post which will take about 2 hours, then have lunch for 45 minutes, 
-                    followed by 3 hours of coding. I want to finish by 5pm."
+                    I need to write a letter to Jane. This will take about 2 hours. Then lunch for 45 minutes, 
+                    then walk the dog. Then finish my novel. I want to finish by 5pm.
                 </p>
                 <p>The app will create a schedule breaking down your day into manageable tasks.</p>
                 <p><kbd class="px-1 bg-slate-100 rounded">?</kbd> Toggle help</p>
@@ -156,9 +157,11 @@
             <div class="bg-white rounded-lg p-6 max-w-sm w-full">
                 <h3 class="font-bold mb-4">Share your task list</h3>
                 <input type="text" 
+                    ref="shareUrl"
                     :value="window.location.href" 
                     class="w-full p-2 border rounded mb-4 bg-slate-50"
-                    readonly>
+                    readonly
+                    @click="$refs.shareUrl.select()">
                 <div class="flex justify-end space-x-2">
                     <button @click="closeShareModal" 
                         class="px-4 py-2 rounded hover:opacity-75 bg-slate-100">
@@ -369,11 +372,18 @@
 
                     if (!this.tasks.length) return;
                     
-                    // Only handle 'p' if in view mode
-                    if (e.key === 'p' && this.is_view_mode) {
-                        e.preventDefault();
-                        window.location.href = '/';
-                        return;
+                    // Only handle 'p' and 's' if in view mode
+                    if (this.is_view_mode) {
+                        if (e.key === 'p') {
+                            e.preventDefault();
+                            window.location.href = '/';
+                            return;
+                        }
+                        if (e.key === 's') {
+                            e.preventDefault();
+                            this.shareList();
+                            return;
+                        }
                     }
                     
                     // Only handle task navigation in view mode
@@ -397,6 +407,13 @@
                             }
                             break;
                     }
+
+                    // Handle escape key for modal
+                    if (e.key === 'Escape' && this.showShareModal) {
+                        e.preventDefault();
+                        this.closeShareModal();
+                        return;
+                    }
                 },
                 toggleHelp() {
                     this.showHelp = !this.showHelp;
@@ -406,8 +423,11 @@
                     // Copy to clipboard
                     navigator.clipboard.writeText(window.location.href)
                         .then(() => {
-                            // Optional: You could add a toast notification here
                             console.log('URL copied to clipboard');
+                            // Select the URL text after modal is rendered
+                            this.$nextTick(() => {
+                                this.$refs.shareUrl.select();
+                            });
                         })
                         .catch(err => {
                             console.error('Failed to copy URL:', err);
