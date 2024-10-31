@@ -8,6 +8,9 @@ from typing import List, Optional
 # Get database path from environment variable, default to local directory
 DB_PATH = os.getenv('DB_PATH', 'tasks.db')
 
+# Ensure the directory exists
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH)

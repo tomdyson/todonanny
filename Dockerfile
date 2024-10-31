@@ -17,8 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data
+# Create data directory for SQLite with proper permissions
+RUN mkdir -p /app/data && \
+    chown -R 1000:1000 /app/data && \
+    chmod 777 /app/data
 
 # Copy Python requirements and install
 COPY requirements.txt .
@@ -29,8 +31,8 @@ COPY . .
 # Copy built CSS from css-builder stage
 COPY --from=css-builder /app/dist/output.css dist/
 
-# Create non-root user
-RUN useradd -m appuser && chown -R appuser:appuser /app
+# Create non-root user with explicit UID/GID
+RUN useradd -u 1000 -m appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Set database path for production
