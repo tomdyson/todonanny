@@ -20,12 +20,28 @@ try:
         os.makedirs(db_dir, exist_ok=True)
         print(f"Directory exists or was created: {db_dir}")
     
+    # Try to create an empty database file if it doesn't exist
+    if not os.path.exists(DB_PATH):
+        print(f"Attempting to create database file: {DB_PATH}")
+        try:
+            with open(DB_PATH, 'a'):
+                os.utime(DB_PATH, None)
+            print(f"Successfully created database file")
+        except Exception as e:
+            print(f"Error creating database file: {str(e)}")
+    
     # Check directory permissions and ownership
     if db_dir:
         stat_info = os.stat(db_dir)
         print(f"Directory permissions: {stat.filemode(stat_info.st_mode)}")
         print(f"Directory owner: {stat_info.st_uid}")
         print(f"Directory group: {stat_info.st_gid}")
+        
+        if os.path.exists(DB_PATH):
+            db_stat = os.stat(DB_PATH)
+            print(f"Database file permissions: {stat.filemode(db_stat.st_mode)}")
+            print(f"Database file owner: {db_stat.st_uid}")
+            print(f"Database file group: {db_stat.st_gid}")
     
     # List directory contents
     if db_dir:
