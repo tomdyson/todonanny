@@ -59,6 +59,10 @@ class TaskResponse(BaseModel):
     list_id: str
 
 
+class TaskUpdateRequest(BaseModel):
+    completed: bool
+
+
 # Get environment variables
 MODEL_NAME = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
 API_KEY = os.getenv("LLM_API_KEY")
@@ -161,13 +165,13 @@ async def get_tasks(list_id: str):
     return {"tasks": tasks}
 
 @app.put("/api/tasks/{list_id}/{task_index}")
-async def update_task(list_id: str, task_index: int, completed: bool):
+async def update_task(list_id: str, task_index: int, request: TaskUpdateRequest):
     try:
         UUID(list_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid list ID format")
     
-    if not database.update_task_status(list_id, task_index, completed):
+    if not database.update_task_status(list_id, task_index, request.completed):
         raise HTTPException(status_code=404, detail="Task not found")
     return {"success": True}
 

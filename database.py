@@ -70,14 +70,28 @@ def get_task_list(list_id: str) -> Optional[List[dict]]:
 
 def update_task_status(list_id: str, task_index: int, completed: bool) -> bool:
     with get_db() as conn:
+        # First verify the list exists
+        list_exists = conn.execute('SELECT 1 FROM task_lists WHERE id = ?', (list_id,)).fetchone()
+        if not list_exists:
+            return False
+
+        # Get the task ID for the given index
         task = conn.execute('''
-        UPDATE tasks 
-        SET completed = ?
-        WHERE list_id = ? AND id IN (
-            SELECT id FROM tasks WHERE list_id = ? ORDER BY start_time LIMIT 1 OFFSET ?
-        )
-        RETURNING *
-        ''', (completed, list_id, list_id, task_index)).fetchone()
+            SELECT id FROM tasks 
+            WHERE list_id = ? 
+            ORDER BY start_time 
+            LIMIT 1 OFFSET ?
+        ''', (list_id, task_index)).fetchone()
+
+        if not task:
+            return False
+
+        # Update the task status
+        conn.execute('''
+            UPDATE tasks 
+            SET completed = ?
+            WHERE id = ?
+        ''', (completed, task['id']))
         
         conn.commit()
-        return bool(task) 
+        return True

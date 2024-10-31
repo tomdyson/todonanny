@@ -227,8 +227,21 @@
                     this.tasks[index].completed = !this.tasks[index].completed;
                     this.saveTasks();
                 },
-                saveTasks() {
-                    localStorage.setItem('dailyTasks', JSON.stringify(this.tasks));
+                async saveTasks() {
+                    if (this.list_id) {  // Only make API call if we have a list_id
+                        const index = this.tasks.findIndex(task => task.completed !== task._previousCompleted);
+                        if (index !== -1) {
+                            const task = this.tasks[index];
+                            try {
+                                await this.updateTaskStatus(index, task.completed);
+                                task._previousCompleted = task.completed;  // Update previous state after successful save
+                            } catch (error) {
+                                // Revert the change if the API call fails
+                                task.completed = task._previousCompleted;
+                                console.error('Failed to update task status:', error);
+                            }
+                        }
+                    }
                 },
                 loadTasks() {
                     const savedTasks = localStorage.getItem('dailyTasks');
@@ -243,7 +256,11 @@
                         const response = await fetch(`/api/tasks/${this.list_id}`);
                         if (!response.ok) throw new Error('Failed to load tasks');
                         const data = await response.json();
-                        this.tasks = data.tasks;
+                        // Store the initial completed state
+                        this.tasks = data.tasks.map(task => ({
+                            ...task,
+                            _previousCompleted: task.completed
+                        }));
                         this.statement = "loaded"; // To show the task list
                     } catch (error) {
                         console.error('Error loading tasks:', error);
