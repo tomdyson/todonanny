@@ -13,6 +13,7 @@ idna>=3.10
 jiter>=0.6.1
 llm>=0.28
 llm-anthropic>=0.23
+llm-gemini>=0.27
 openai
 pip>=24.3.1
 pluggy>=1.5.0
