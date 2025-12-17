@@ -1,7 +1,7 @@
 import json
 import os
+import re
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import List
 from uuid import UUID
@@ -77,6 +77,14 @@ MODEL_NAME = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
 API_KEY = os.getenv("LLM_API_KEY")
 
 
+def strip_markdown_code_blocks(text: str) -> str:
+    """Remove markdown code blocks from text, leaving only the content."""
+    # Remove markdown code blocks (```json ... ``` or ``` ... ```)
+    text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\n?```\s*$", "", text, flags=re.MULTILINE)
+    return text.strip()
+
+
 # Update the system prompt to be more explicit about JSON format
 SYSTEM_PROMPT = """You are a helpful daily planner assistant. Given a list of tasks, 
 create a schedule for today starting at {start_time} (unless the user specifies a start time). 
@@ -130,9 +138,12 @@ async def plan_day(request: TaskRequest):  # sourcery skip: invert-any-all
         raw_response = response.text()
         print("Raw LLM response:", raw_response)  # Debug print
 
+        # Strip markdown code blocks if present
+        cleaned_response = strip_markdown_code_blocks(raw_response)
+
         # Parse JSON response
         try:
-            tasks = json.loads(raw_response)
+            tasks = json.loads(cleaned_response)
             # Validate the structure
             if not isinstance(tasks, list):
                 raise ValueError("Response is not a JSON array")
