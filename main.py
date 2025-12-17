@@ -147,6 +147,12 @@ async def plan_day(request: TaskRequest):  # sourcery skip: invert-any-all
         # Get response from LLM
         response = model.prompt(request.description, system=system)
 
+        # Log model and token usage
+        print(f"Model used: {MODEL_NAME}")
+        usage = response.usage()
+        if usage:
+            print(f"Token count - Input: {usage.input}, Output: {usage.output}, Total: {usage.input + usage.output}")
+        
         # Add debug logging
         raw_response = response.text()
         print("Raw LLM response:", raw_response)  # Debug print
@@ -279,6 +285,12 @@ async def replan_day(request: ReplanRequest):
         # (some LLM backends require at least one user message)
         response = model.prompt(request.tweak_feedback, system=replan_system_prompt)
 
+        # Log model and token usage
+        print(f"Model used: {MODEL_NAME}")
+        usage = response.usage()
+        if usage:
+            print(f"Token count - Input: {usage.input}, Output: {usage.output}, Total: {usage.input + usage.output}")
+        
         # Add debug logging
         raw_response = response.text()
         print("Raw LLM replan response:", raw_response)  # Debug print
