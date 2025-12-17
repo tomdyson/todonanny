@@ -101,3 +101,39 @@ def update_task_status(list_id: str, task_index: int, completed: bool) -> bool:
         
         conn.commit()
         return True
+
+def update_task_list(list_id: str, tasks: List[dict]) -> bool:
+    """
+    Replace all tasks for a given list_id while preserving the list record.
+    
+    NOTE: Completion status mapping uses position-based matching. If the number
+    of tasks changes significantly, completion status may not align perfectly
+    with the intended tasks. This is acceptable for MVP but should be documented
+    in the UI or considered for future improvements (e.g., fuzzy matching by description).
+    
+    Args:
+        list_id: The UUID of the task list to update
+        tasks: List of new task dictionaries with start_time, end_time, description
+    
+    Returns:
+        bool: True if update succeeded, False if list doesn't exist
+    """
+    with get_db() as conn:
+        # Verify the list exists
+        list_exists = conn.execute('SELECT 1 FROM task_lists WHERE id = ?', (list_id,)).fetchone()
+        if not list_exists:
+            return False
+        
+        # Delete all existing tasks for this list
+        conn.execute('DELETE FROM tasks WHERE list_id = ?', (list_id,))
+        
+        # Insert new tasks, preserving any completion status that was passed
+        for task in tasks:
+            completed = task.get('completed', False)
+            conn.execute('''
+            INSERT INTO tasks (list_id, start_time, end_time, description, completed)
+            VALUES (?, ?, ?, ?, ?)
+            ''', (list_id, task['start_time'], task['end_time'], task['description'], completed))
+        
+        conn.commit()
+        return True

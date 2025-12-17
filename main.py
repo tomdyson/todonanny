@@ -72,6 +72,19 @@ class TaskUpdateRequest(BaseModel):
     completed: bool
 
 
+class TaskWithCompletion(BaseModel):
+    start_time: str
+    end_time: str
+    description: str
+    completed: bool = False
+
+
+class ReplanRequest(BaseModel):
+    list_id: str
+    tweak_feedback: str
+    tasks: List[TaskWithCompletion]
+
+
 # Get environment variables
 MODEL_NAME = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
 API_KEY = os.getenv("LLM_API_KEY")
@@ -209,6 +222,124 @@ async def update_task(list_id: str, task_index: int, request: TaskUpdateRequest)
 @app.get("/tasks/{list_id}")
 async def task_list_page(list_id: str):
     return FileResponse("index.html")
+
+
+@app.post("/api/replan", response_model=TaskResponse)
+async def replan_day(request: ReplanRequest):
+    """Adjust an existing schedule based on user feedback.
+
+    This endpoint takes feedback about the current schedule and re-generates it
+    using the LLM. The new schedule replaces the existing one for the given list_id.
+    Completion status is preserved by position (documented limitation).
+    """
+    try:
+        # Validate list_id format
+        try:
+            UUID(request.list_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid list ID format")
+
+        # Verify the list exists
+        existing_tasks = database.get_task_list(request.list_id)
+        if existing_tasks is None:
+            raise HTTPException(status_code=404, detail="Task list not found")
+
+        # Format current schedule as text for LLM context, including completion status
+        current_schedule_text = "Current schedule:\n"
+        for i, task in enumerate(request.tasks):
+            status = "(completed)" if getattr(task, "completed", False) else "(pending)"
+            current_schedule_text += (
+                f"{i+1}. {task.start_time}-{task.end_time}: {task.description} {status}\n"
+            )
+
+        # Initialize LLM model
+        model = llm.get_model(MODEL_NAME)
+        if API_KEY:
+            model.key = API_KEY
+
+        # Create a system prompt that includes the current schedule
+        replan_system_prompt = (
+            "You are a helpful daily planner assistant. The user wants to adjust their existing schedule based on feedback.\n\n"
+            + current_schedule_text
+            + "\nUser feedback: "
+            + request.tweak_feedback
+            + "\n\nPlease adjust the schedule based on this feedback. Maintain the same time constraints and overall structure where possible, but make the requested adjustments.\n\n"
+            + "Important: Tasks marked as (completed) in the current schedule are already done and should not be scheduled again. "
+            + "When adjusting the schedule, preserve completed tasks and only reschedule or adjust pending tasks unless the user feedback explicitly says otherwise.\n\n"
+            + "You must respond with a valid JSON array of objects. Each object must have exactly these fields:\n"
+            + "- \"start_time\": string in \"HH:MM\" format\n"
+            + "- \"end_time\": string in \"HH:MM\" format\n"
+            + "- \"description\": string with the task description\n\n"
+            + "Example format:\n"
+            + "[{\"start_time\": \"09:00\", \"end_time\": \"09:45\", \"description\": \"Morning review\"}, {\"start_time\": \"09:45\", \"end_time\": \"10:30\", \"description\": \"Email responses\"}]\n\n"
+            + "Keep responses concise and practical.\nIMPORTANT: Respond ONLY with the JSON array, no additional text."
+        )
+
+        # Get response from LLM. Provide the user's tweak feedback as the user message
+        # (some LLM backends require at least one user message)
+        response = model.prompt(request.tweak_feedback, system=replan_system_prompt)
+
+        # Add debug logging
+        raw_response = response.text()
+        print("Raw LLM replan response:", raw_response)  # Debug print
+
+        # Strip markdown code blocks if present
+        cleaned_response = strip_markdown_code_blocks(raw_response)
+
+        # Parse JSON response
+        try:
+            new_tasks = json.loads(cleaned_response)
+            # Validate the structure
+            if not isinstance(new_tasks, list):
+                raise ValueError("Response is not a JSON array")
+
+            # Validate each task
+            for task in new_tasks:
+                if not all(k in task for k in ("start_time", "end_time", "description")):
+                    raise ValueError("Task missing required fields")
+
+            # Update the task list with new tasks, preserving completion status by position
+            tasks_to_save = []
+            for i, task in enumerate(new_tasks):
+                # Preserve completion status from the request by position
+                completed = request.tasks[i].completed if i < len(request.tasks) else False
+                task_with_completion = {
+                    "start_time": task["start_time"],
+                    "end_time": task["end_time"],
+                    "description": task["description"],
+                    "completed": completed,
+                }
+                tasks_to_save.append(task_with_completion)
+
+            # Save updated tasks to database
+            if not database.update_task_list(request.list_id, tasks_to_save):
+                raise HTTPException(status_code=404, detail="Failed to update task list")
+
+            # Return response tasks (without completed flag - frontend handles it)
+            response_tasks = [
+                Task(start_time=t["start_time"], end_time=t["end_time"], description=t["description"])
+                for t in new_tasks
+            ]
+            return TaskResponse(tasks=response_tasks, list_id=request.list_id)
+
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing error: {str(e)}")  # Debug print
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to parse LLM response as JSON: {str(e)}",
+            )
+        except ValueError as e:
+            print(f"Validation error: {str(e)}")  # Debug print
+            raise HTTPException(
+                status_code=500, detail=f"Invalid response format: {str(e)}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"General error in replan: {str(e)}")  # Debug print
+        raise HTTPException(
+            status_code=500, detail=f"Error processing replan request: {str(e)}"
+        )
 
 
 if __name__ == "__main__":

@@ -4,8 +4,11 @@ services:
     build: .
     volumes:
       - tasks_data:/app/data
+      - ./.env:/app/.env
     ports:
       - "8000:8000"
+    env_file:
+      - .env
 
 volumes:
   tasks_data:

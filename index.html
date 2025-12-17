@@ -53,7 +53,7 @@
         <div class="image-container w-full lg:w-1/3 p-4" v-else>
             <img src="/static/paris-figure.jpg" alt="Paris" class="w-12 lg:w-full">
         </div>
-        <div class="w-full lg:w-3/4 p-4">
+        <div class="w-full lg:w-3/4 p-4 space-y-4">
             <!-- Content for 2nd column -->
             <form @submit="getStatement" v-if="!is_view_mode">
                 <div class="flex justify-between items-center mb-3 mt-3">
@@ -76,7 +76,7 @@
                     type="submit" :value="button_text" />
             </form>
 
-            <div class="mt-1 mb-2" v-if="tasks.length">
+            <div v-if="tasks.length">
                 <div class="my-3 text-lg font-mono text-white bg-rose-300 pt-2 px-2 pb-1 rounded leading-normal">
                     <div v-for="(task, index) in tasks" 
                         :key="index" 
@@ -97,20 +97,41 @@
             </div>
 
             <div id="context" v-if="html_results.length"
-                class="my-3 text-lg pt-2 px-2 pb-1 rounded leading-normal bg-cyan-100 text-cyan-600"
+                class="text-lg pt-2 px-2 pb-1 rounded leading-normal bg-cyan-100 text-cyan-600"
                 v-html="html_results">
             </div>
 
             <div v-if="answer.length" v-html="answer"
-                class="my-3 text-lg bg-green-200 font-mono pt-2 px-2 pb-1 rounded leading-normal"></div>
+                class="text-lg bg-green-200 font-mono pt-2 px-2 pb-1 rounded leading-normal"></div>
 
             <!-- Add link back to form -->
-            <div v-if="is_view_mode && tasks.length" class="mt-4 flex space-x-2">
+            <div v-if="is_view_mode && tasks.length" class="flex space-x-2">
+                <button v-if="!showTweakForm" @click="showTweakForm = !showTweakForm" 
+                    class="hover:opacity-75 cursor-pointer bg-amber-200 text-black px-2 py-1 font-light rounded text-lg">
+                    Tweak
+                </button>
                 <a href="/" class="hover:opacity-75 cursor-pointer bg-cyan-100 px-2 py-1 font-light rounded text-lg">Plan a new day</a>
                 <button @click="shareList" 
                     class="hover:opacity-75 cursor-pointer bg-green-100 px-2 py-1 font-light rounded text-lg">
                     Share
                 </button>
+            </div>
+
+            <!-- Tweak form -->
+            <div v-if="is_view_mode && showTweakForm">
+                <form @submit="submitTweak">
+                    <textarea id="tweak-textarea" 
+                        class="text-lg font-light border border-gray-300 px-2 py-1 mb-1 w-full rounded resize-none overflow-hidden min-h-[36px] leading-[1.5]"
+                        v-model.lazy="tweakDescription" 
+                        @input="autoResize" 
+                        autofocus="true"
+                        rows="1"
+                        placeholder="Describe how you'd like to adjust the plan"
+                    ></textarea>
+                    <input id="tweak-submit"
+                        class="hover:opacity-75 mt-1 cursor-pointer bg-amber-200 text-black px-2 py-1 font-light rounded text-lg mb-1"
+                        type="submit" :value="tweakButtonText" />
+                </form>
             </div>
 
         </div>
@@ -134,6 +155,7 @@
                     <li><kbd class="px-1 bg-slate-100 rounded">↑</kbd> / <kbd class="px-1 bg-slate-100 rounded">↓</kbd> Navigate tasks</li>
                     <li><kbd class="px-1 bg-slate-100 rounded">space</kbd> or <kbd class="px-1 bg-slate-100 rounded">x</kbd> Toggle selected task</li>
                     <li><kbd class="px-1 bg-slate-100 rounded">s</kbd> Share task list</li>
+                    <li><kbd class="px-1 bg-slate-100 rounded">t</kbd> Toggle tweak form</li>
                     <li><kbd class="px-1 bg-slate-100 rounded">p</kbd> Plan a new day</li>
                     <li><kbd class="px-1 bg-slate-100 rounded">?</kbd> Toggle help</li>
                 </ul>
@@ -199,6 +221,9 @@
                 selectedTaskIndex: -1, // Track which task is currently selected
                 showHelp: false,
                 showShareModal: false,
+                showTweakForm: false,
+                tweakDescription: "",
+                tweakButtonText: "Tweak",
             },
             methods: {
                 async getStatement(e) {
@@ -363,6 +388,13 @@
                     }
                 },
                 handleKeyboard(e) {
+                    // Ignore shortcuts when focused on input, textarea, or editable elements
+                    const target = e.target || {};
+                    const tag = target.tagName ? target.tagName.toLowerCase() : '';
+                    if (tag === 'input' || tag === 'textarea' || target.isContentEditable) {
+                        return;
+                    }
+
                     // Handle '?' key in both modes
                     if (e.key === '?') {
                         e.preventDefault();
@@ -374,6 +406,11 @@
                     
                     // Only handle 'p' and 's' if in view mode
                     if (this.is_view_mode) {
+                        if (e.key === 't') {
+                            e.preventDefault();
+                            this.showTweakForm = !this.showTweakForm;
+                            return;
+                        }
                         if (e.key === 'p') {
                             e.preventDefault();
                             window.location.href = '/';
@@ -435,6 +472,46 @@
                 },
                 closeShareModal() {
                     this.showShareModal = false;
+                },
+                async submitTweak(e) {
+                    try {
+                        e.preventDefault();
+                        this.tweakButtonText = "Tweaking...";
+                        
+                        // Capture current completion status by position
+                        const completionStatus = this.tasks.map(task => task.completed);
+                        
+                        const response = await fetch(`/api/replan`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                list_id: this.list_id,
+                                tweak_feedback: this.tweakDescription,
+                                tasks: this.tasks
+                            })
+                        });
+                        
+                        if (!response.ok) throw new Error('Network response was not ok');
+                        
+                        const responseJson = await response.json();
+                        
+                        // Update tasks while preserving completion status by position
+                        this.tasks = responseJson.tasks.map((task, index) => ({
+                            ...task,
+                            completed: completionStatus[index] || false
+                        }));
+                        
+                        // Reset tweak form
+                        this.tweakDescription = "";
+                        this.showTweakForm = false;
+                        this.tweakButtonText = "Tweak";
+                    } catch (error) {
+                        console.log(error);
+                        this.tweakButtonText = "Error tweaking schedule";
+                        setTimeout(() => {
+                            this.tweakButtonText = "Tweak";
+                        }, 2000);
+                    }
                 }
             },
             mounted() {
