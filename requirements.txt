@@ -1,5 +1,5 @@
 annotated-types==0.7.0
-anthropic @ https://github.com/simonw/anthropic-sdk-python/archive/9c13bb441ee4eb88a100ed363fc431ec8fd30c43.zip
+anthropic
 anyio==4.6.2.post1
 certifi==2024.8.30
 click==8.1.7
